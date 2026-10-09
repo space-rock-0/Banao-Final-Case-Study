@@ -172,23 +172,4 @@ Pushback 4 is the one I expect to be resented, and it is the one I would defend 
 I kept the steel price as a labelled assumption in Appendix A, because the task requires a rupee value and the client can replace the number in week 1. The difference between a labelled assumption and an unlabelled one is the whole difference between this and the first draft.
 
 ## 11) Github Repo URL
-
-The repository for this submission has been created alongside the three documents. It contains:
-
-| Path | Contents |
-|---|---|
-| `README.md` | How to read the three deliverables, and which section of the case study answers which form question |
-| `docs/case-study.md` | The case study |
-| `docs/client-note.md` | The one-page note to the client contact |
-| `docs/submission-form.md` | This form |
-| `analysis/value_model.py` | Every rupee figure in sections 5 and 7, computed from the assumptions register. Prints the waste band, the crossover bounds, the cost build-up, the margin, all three value scenarios, payback and break-even |
-| `analysis/wastage_check.py` | The band reconciliation and crossover at any plate share, with a regression test asserting the client's stated 7 to 10% is reachable for every plate share up to 33.3% |
-| `tests/test_arithmetic.py` | Asserts 7,800 t and 9.75% at P = 15%, INR 33.08 lakh delivery cost, 39.9% margin, INR 1.46 crore conservative value and 4.5-month payback |
-
-`tests/test_arithmetic.py` runs against `analysis/value_model.py` and must pass before submission. The arithmetic in the case study is not maintained by hand; it is generated from the assumptions register, so a changed assumption changes every downstream figure including the price case.
-
-**On the prototype.** There is a working one at `prototype/index.html`, and it is deliberately not a nesting optimiser. It runs the actual deterministic packer from `analysis/packer.js` in the browser, lays the same 15 synthetic parts out under three capabilities, and lets you switch between them. `node tests/test_packer.js` asserts all 13 findings it displays, 13/13 passing.
-
-It exists because building it changed my answer. I expected the Advisor's gain to come from nesting more tightly. It does not. On the plate in the prototype the software arms consume 380 mm less plate height than the hand nest and recover **exactly 0.000 t**, because the material saved comes back as a leftover nobody measures. Every recoverable tonne comes from registering the offcut. That is a sharper version of what the client told us, and it is the argument for widening the scope from "nesting optimisation" to material yield.
-
-What the prototype does not prove: it is one synthetic plate, so it is a bug report and not a baseline. The replay still runs on 40 nests across 5 closed projects before anyone decides anything.
+https://github.com/space-rock-0/Banao-Final-Case-Study
