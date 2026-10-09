@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yield Advisor | offline replay prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<style>
+:root{
+  --bg:#0B0F14; --panel:#121821; --panel2:#0E141C; --line:#1E2836;
+  --steel:#8FA3B8; --steel-dim:#5A6B7E;
+  --hot:#F0803C; --hot-dim:rgba(240,128,60,.14);
+  --good:#3DD68C; --good-dim:rgba(61,214,140,.14);
+  --warn:#E8B84B;
+  --ink:#E8EDF2; --muted:#8B9AAB; --faint:#5A6B7E;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:Inter,system-ui,sans-serif; font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+section{padding:110px 0;border-bottom:1px solid var(--line)}
+.eyebrow{
+  font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--hot);margin-bottom:18px;
+}
+h1{font-size:clamp(38px,6.4vw,76px);font-weight:800;line-height:1.02;letter-spacing:-.03em}
+h2{font-size:clamp(28px,3.6vw,44px);font-weight:800;line-height:1.1;letter-spacing:-.02em;margin-bottom:16px}
+h3{font-size:19px;font-weight:700;margin-bottom:8px}
+p{color:var(--muted);max-width:66ch}
+.lede{font-size:19px;color:var(--steel);max-width:62ch;line-height:1.65}
+strong{color:var(--ink);font-weight:600}
+.hl{color:var(--hot);font-weight:600}
+.hlg{color:var(--good);font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.92em}
+.tiny{font-size:12.5px;color:var(--faint);line-height:1.55}
+
+/* ------------------------------------------------------------ hero */
+.hero{position:relative;min-height:88vh;display:flex;align-items:center;overflow:hidden}
+.hero-bg{position:absolute;inset:0;pointer-events:none}
+.grid-bg{
+  position:absolute;inset:-20%;
+  background-image:linear-gradient(rgba(143,163,184,.055) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(143,163,184,.055) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(ellipse 70% 60% at 50% 45%,#000 30%,transparent 78%);
+}
+.glow{position:absolute;border-radius:50%;filter:blur(90px);opacity:.30}
+.glow.a{width:520px;height:520px;background:#F0803C;top:-140px;right:-80px}
+.glow.b{width:460px;height:460px;background:#2E6BE6;bottom:-160px;left:-120px;opacity:.22}
+@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(-26px,34px)}}
+.glow.a{animation:drift 17s ease-in-out infinite}
+.glow.b{animation:drift 23s ease-in-out infinite reverse}
+.hero .wrap{position:relative;z-index:2}
+.hero h1{margin-bottom:22px;max-width:19ch}
+.tag{
+  display:inline-flex;align-items:center;gap:9px;
+  font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--steel);border:1px solid var(--line);border-radius:100px;
+  padding:7px 15px;margin-bottom:28px;background:rgba(255,255,255,.02)
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--hot);
+     box-shadow:0 0 0 4px var(--hot-dim)}
+.hero-stats{display:flex;gap:44px;margin-top:46px;flex-wrap:wrap}
+.hstat b{display:block;font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.hstat span{font-size:12px;color:var(--faint);letter-spacing:.05em}
+.scroll{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
+        font-size:10px;letter-spacing:.2em;color:var(--faint);
+        display:flex;flex-direction:column;align-items:center;gap:9px}
+@keyframes bob{0%,100%{transform:translateY(0);opacity:.5}50%{transform:translateY(8px);opacity:1}}
+.scroll i{width:1px;height:34px;background:linear-gradient(var(--faint),transparent);
+          display:block;animation:bob 2s ease-in-out infinite}
+
+/* --------------------------------------------------------- controls */
+.armbar{display:flex;gap:10px;flex-wrap:wrap;margin:38px 0 26px}
+.armbtn{
+  font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+  padding:11px 18px;border-radius:9px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--muted);transition:all .22s ease;
+  display:flex;align-items:center;gap:9px
+}
+.armbtn:hover{border-color:var(--steel-dim);color:var(--ink);transform:translateY(-2px)}
+.armbtn.on{border-color:var(--hot);background:var(--hot-dim);color:var(--hot)}
+.armbtn.on[data-arm="advisor"]{border-color:var(--good);background:var(--good-dim);color:var(--good)}
+.armbtn b{font-family:var(--mono);font-size:11px;opacity:.7;font-weight:500}
+
+/* ------------------------------------------------------------ stage */
+.stage{
+  display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start
+}
+@media(max-width:960px){.stage{grid-template-columns:1fr}}
+.plate{
+  position:relative;background:var(--panel2);border:1px solid var(--line);
+  border-radius:14px;padding:20px;overflow:hidden
+}
+.plate-head{display:flex;justify-content:space-between;align-items:baseline;
+            margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.plate-head .nm{font-size:14px;font-weight:700}
+.plate-head .dim{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.canvas{position:relative;width:100%;aspect-ratio:3/2;background:#070A0E;
+        border:1px solid #18202B;border-radius:8px;overflow:hidden}
+#svg{position:absolute;inset:0;width:100%;height:100%}
+.cutline{stroke:rgba(240,128,60,.35);stroke-width:1.5;stroke-dasharray:5 4;fill:none}
+.ghostline{stroke:rgba(143,163,184,.22);stroke-width:1;stroke-dasharray:3 4;fill:none}
+.part{fill:#2A3644;stroke:#41566B;stroke-width:1.5}
+.part.advisor{fill:#1E3A2C;stroke:#3DD68C}
+.part-tag{fill:#93A7BB;font-family:var(--mono);font-size:9px;pointer-events:none}
+.rem{stroke:#3DD68C;stroke-width:2;fill:rgba(61,214,140,.10)}
+.rem.dead{stroke:#F0803C;stroke-dasharray:5 4;fill:rgba(240,128,60,.07)}
+.remlab{fill:#3DD68C;font-family:var(--mono);font-size:10px}
+.remlab.dead{fill:#F0803C}
+.legend{display:flex;gap:20px;margin-top:14px;flex-wrap:wrap;font-size:11.5px;color:var(--faint)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;
+          vertical-align:-1px;border:1px solid}
+
+/* --------------------------------------------------------- readout */
+.readout{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card.k{border-left:3px solid var(--hot)}
+.card.g{border-left:3px solid var(--good)}
+.metric{display:flex;justify-content:space-between;align-items:baseline;
+        padding:7px 0;border-bottom:1px dashed #1A2330;gap:10px}
+.metric:last-child{border-bottom:0}
+.metric span{font-size:12.5px;color:var(--faint)}
+.metric b{font-family:var(--mono);font-size:15px;font-weight:500}
+.bar{height:9px;background:#0A0E13;border-radius:5px;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;border-radius:5px;transition:width .9s cubic-bezier(.22,1,.36,1)}
+.bar i.hot{background:linear-gradient(90deg,#F0803C,#FFA96B)}
+.bar i.good{background:linear-gradient(90deg,#3DD68C,#7BE8B4)}
+.big{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.biglab{font-size:11.5px;color:var(--faint);margin-top:3px}
+
+/* ---------------------------------------------------------- finding */
+.finding{
+  margin-top:30px;background:linear-gradient(135deg,rgba(240,128,60,.07),rgba(61,214,140,.05));
+  border:1px solid var(--line);border-radius:14px;padding:30px
+}
+.finding .row{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:20px}
+@media(max-width:760px){.finding .row{grid-template-columns:1fr}}
+.fbox{background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:10px;padding:18px}
+.fbox b{display:block;font-size:30px;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
+.fbox span{font-size:12.5px;color:var(--muted)}
+.fbox.zero b{color:var(--hot)}
+.fbox.big b{color:var(--good)}
+
+/* ------------------------------------------------------------ chart */
+.chartbox{background:var(--panel2);border:1px solid var(--line);border-radius:14px;
+           padding:22px;margin-top:26px}
+.chartwrap{position:relative}
+#bandChart{width:100%;height:auto;display:block;overflow:visible}
+.axis{stroke:#223040;stroke-width:1}
+.grid-l{stroke:#151D27;stroke-width:1}
+.axlab{fill:#5A6B7E;font-family:var(--mono);font-size:10px}
+.bandline{stroke:#F0803C;stroke-width:2.5;fill:none;stroke-linecap:round}
+.bandline2{stroke:rgba(240,128,60,.42);stroke-width:2.5;fill:none;stroke-dasharray:6 4}
+.statedband{fill:rgba(61,214,140,.13)}
+.statedlab{fill:#3DD68C;font-family:var(--mono);font-size:10px}
+.vline{stroke:#3DD68C;stroke-width:1.5;stroke-dasharray:4 3}
+.pt{fill:#fff;stroke:#3DD68C;stroke-width:3}
+.caption{font-family:var(--mono);font-size:11px;fill:#5A6B7E}
+
+/* -------------------------------------------------------- ledger */
+.stack{display:flex;height:46px;border-radius:9px;overflow:hidden;margin:22px 0 10px;
+       border:1px solid var(--line)}
+.stack div{display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+           font-size:10.5px;color:#080C10;font-weight:500;transition:flex-grow 1.1s ease}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}
+.lcell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.lcell b{display:block;font-family:var(--mono);font-size:19px;margin-bottom:2px}
+.lcell span{font-size:11.5px;color:var(--faint)}
+
+/* -------------------------------------------------------------- why */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:16px;margin-top:34px}
+.fcard{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:22px;
+       transition:transform .3s ease,border-color .3s ease}
+.fcard:hover{transform:translateY(-5px);border-color:var(--hot)}
+.fcard .n{font-family:var(--mono);font-size:11px;color:var(--hot);margin-bottom:11px}
+.fcard p{font-size:14px}
+.fn{display:flex;gap:13px;margin-bottom:22px;align-items:flex-start}
+.fn i{width:21px;height:21px;border-radius:50%;border:1px solid var(--good);color:var(--good);
+      font-size:11px;display:flex;align-items:center;justify-content:center;flex:none;
+      font-style:normal;margin-top:2px}
+.fn.no i{border-color:var(--hot);color:var(--hot)}
+.fn p{font-size:14.5px}
+.fn.no p{color:var(--muted)}
+
+.closing{text-align:center;padding:100px 0}
+.closing h2{max-width:20ch;margin:0 auto 18px}
+.cta{display:inline-flex;align-items:center;gap:10px;background:var(--hot);color:#0B0F14;
+     font-weight:700;font-size:15px;padding:15px 30px;border-radius:10px;margin-top:22px;
+     text-decoration:none;transition:transform .22s ease,filter .22s ease}
+.cta:hover{transform:translateY(-3px);filter:brightness(1.09)}
+footer{padding:44px 0 60px;color:var(--faint);font-size:12.5px}
+footer a{color:var(--steel)}
+.note{background:rgba(232,184,75,.07);border:1px solid rgba(232,184,75,.25);
+      border-radius:10px;padding:15px 17px;margin-top:24px}
+.note p{font-size:13.5px;color:#C9B489;max-width:none}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ HERO -->
+<header class="hero">
+  <div class="hero-bg">
+    <div class="grid-bg"></div>
+    <div class="glow a"></div>
+    <div class="glow b"></div>
+  </div>
+  <div class="wrap">
+    <div class="tag"><span class="dot"></span>Prototype, week 3 to 4 deliverable</div>
+    <h1>The offcut was already there. Nobody wrote down where it was.</h1>
+    <p class="lede" style="margin-top:26px">
+      Three nesting layouts on one synthetic plate. Same 15 parts, same solver family,
+      same steel. The only variable is whether the leftover gets measured and recorded.
+    </p>
+    <div class="hero-stats">
+      <div class="hstat"><b id="hs1">0.000 t</b><span>GAIN FROM BETTER NESTING</span></div>
+      <div class="hstat"><b id="hs2">0.000 t</b><span>GAIN FROM LOGGING THE OFFCUT</span></div>
+      <div class="hstat"><b id="hs3">0.236 t</b><span>NET LOSS, TODAY</span></div>
+    </div>
+  </div>
+  <div class="scroll"><span>SCROLL</span><i></i></div>
+</header>
+
+<!-- ==================================================== THE THREE ARMS -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">The replay</div>
+    <h2>Same plate. Same parts. Three arms.</h2>
+    <p>
+      This is what the week 3 to 4 replay produces. Nothing here cuts steel, and nothing
+      asks your nesters to change how they work. Switch arms to see the same plate laid out
+      under each capability.
+    </p>
+
+    <div class="armbar" id="armbar">
+      <button class="armbtn on" data-arm="hand"><b>A</b> Hand nest, today</button>
+      <button class="armbtn" data-arm="autoDefault"><b>B</b> Strumis auto, defaults</button>
+      <button class="armbtn" data-arm="advisor"><b>C</b> Yield Advisor</button>
+      <button class="armbtn" id="btnPlay">▶ Play all</button>
+    </div>
+
+    <div class="stage">
+      <div class="plate">
+        <div class="plate-head">
+          <div><span class="nm" id="armName">Hand nest, today</span>
+            <div class="tiny" id="armWhy">Drawn in drawing order, with manual marking gaps.</div></div>
+          <div class="dim">3000 × 2000 × 12 mm · 0.565 t</div>
+        </div>
+        <div class="canvas"><svg id="svg" viewBox="0 0 3000 2000" preserveAspectRatio="none"></svg></div>
+        <div class="legend">
+          <span><i style="background:#2A3644;border-color:#41566B"></i>Part placed</span>
+          <span><i style="background:rgba(240,128,60,.12);border-color:#F0803C"></i>Leftover, not recoverable</span>
+          <span><i style="background:rgba(61,214,140,.14);border-color:#3DD68C"></i>Usable remnant, registered</span>
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="card k">
+          <div class="tiny" style="margin-bottom:9px">RECOVERABLE MATERIAL</div>
+          <div class="big" id="rPct">0%</div>
+          <div class="biglab">parts + usable remnant, over plate mass</div>
+          <div class="bar"><i id="rBar" class="hot" style="width:0%"></i></div>
+        </div>
+        <div class="card g">
+          <div class="tiny" style="margin-bottom:9px">NET LOSS ON THIS PLATE</div>
+          <div class="big" id="rLoss">0.000</div>
+          <div class="biglab">tonnes · per plate · at 15% plate share</div>
+          <div class="bar"><i id="rBar2" class="good" style="width:0%"></i></div>
+        </div>
+        <div class="card">
+          <div class="metric"><span>Parts placed</span><b id="mPlaced">0/15</b></div>
+          <div class="metric"><span>Plate height consumed</span><b id="mUsedH">0 mm</b></div>
+          <div class="metric"><span>Clean leftover</span><b id="mRem">none</b></div>
+          <div class="metric"><span>Remnant clears 500×500?</span><b id="mMin">no</b></div>
+          <div class="metric"><span>Location recorded?</span><b id="mReg">no</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <h3>What the replay actually found</h3>
+      <p class="tiny" style="margin-top:6px">
+        Not the answer I expected when I built this, and the most useful number in the case study.
+      </p>
+      <div class="row">
+        <div class="fbox zero">
+          <b id="fPack">0.000 t</b>
+          <span>from nesting the plate more tightly. Software uses 380 mm less plate height
+          than the hand nest and recovers <strong>exactly nothing</strong>, because the leftover
+          was never measured.</span>
+        </div>
+        <div class="fbox big">
+          <b id="fLog">0.172 t</b>
+          <span>from measuring the same leftover and recording where it is. Same nest, same
+          steel, same parts. Only the record changes.</span>
+        </div>
+      </div>
+      <p style="margin-top:22px;font-size:14.5px">
+        Your nesting team said automatic nesting wastes more than doing it by hand. On this plate
+        they are right, narrowly: the hand nest consumes 380 mm more plate height. But that
+        advantage never reaches the ledger, because the material it saves is handed back as an
+        offcut nobody can find. <strong>This is what you told us:</strong>
+        <span class="mono" style="color:var(--steel)">"I don't think they use the offcuts as well as they could be.
+        The idea is already there, but it could be done better."</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================== THE BAND QUESTION -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Settles the meeting</div>
+    <h2>Your three wastage numbers agree with each other.</h2>
+    <p>
+      Plate 20 to 25%, profiles 5 to 10%, overall 7 to 10%. I tested whether those three can
+      all be true at once. They can, for any split up to about a third of your tonnage being plate.
+      So there is no correction to make to your figures. What is missing is the basis behind them.
+    </p>
+
+    <div class="chartbox">
+      <div class="chartwrap"><svg id="bandChart" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet"></svg></div>
+      <p class="tiny" style="margin-top:16px">
+        Green strip is your stated 7 to 10%. Orange lines are everything your own plate and profile
+        rates allow at each plate share. They overlap until 33.3%, which is why the two ranges are
+        not in conflict. An early draft of this analysis tested the wrong edge of the band,
+        found no solution, and nearly told you your own numbers were wrong.
+      </p>
+    </div>
+
+    <div class="cards">
+      <div class="fcard"><div class="n">THE TEST THAT FAILS</div><h3>Wrong edge</h3>
+        <p>Asks whether the band's <em>upper</em> bound falls below 10%. It never does, so the test
+        returns "impossible". Correct answer, wrong question.</p></div>
+      <div class="fcard"><div class="n">THE TEST THAT WORKS</div><h3>Overlap</h3>
+        <p>Asks whether the <em>lower</em> bound clears the top of your band: 5% + 15P ≤ 10%,
+        so P ≤ 33.3%. Held for every P at or below a third.</p></div>
+      <div class="fcard"><div class="n">THE COUNTER-EXAMPLE</div><h3>P = 15%</h3>
+        <p class="mono" style="color:var(--good)">0.15(20%) + 0.85(5%) = 7.25%</p>
+        <p style="margin-top:8px">Inside your 7 to 10%. One number, settles it in a meeting.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= THE LEDGER -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Where the tonne goes</div>
+    <h2>One bought tonne, split six ways.</h2>
+    <p>
+      This is the ledger that everything else measures against. It is the difference between a
+      grey bar labelled "waste" and a tonne you can attribute, invoice, and act on. The two
+      right-hand buckets are empty today because no cause code exists.
+    </p>
+
+    <div class="stack" id="stackToday">
+      <div style="flex-grow:58.2;background:#3DD68C">PARTS 58.2%</div>
+      <div style="flex-grow:41.8;background:#4A5568;color:#C9D4E0">UNATTRIBUTED WASTE 41.8%</div>
+    </div>
+    <div class="tiny" style="margin-bottom:34px">Today. Every wasted tonne is one number, owned by nobody.</div>
+
+    <div class="stack" id="stackAfter">
+      <div style="flex-grow:58.2;background:#3DD68C">PARTS 58.2%</div>
+      <div style="flex-grow:14.2;background:#2E8B62">USABLE OFFCUT 14.2%</div>
+      <div style="flex-grow:16.1;background:#F0803C">SKELETON 16.1%</div>
+      <div style="flex-grow:5.5;background:#E8B84B">REVISION 5.5%</div>
+      <div style="flex-grow:3.4;background:#C0504E">OWN ERROR 3.4%</div>
+      <div style="flex-grow:2.6;background:#5A6B7E"></div>
+    </div>
+    <div class="tiny">With the cause code live from week 3. Split is illustrative from the replay
+      geometry, not measured from your books. Amber and red are the two buckets you currently cannot fill.</div>
+
+    <div class="lgrid">
+      <div class="lcell"><b style="color:var(--good">15 t/yr</b><span>claimable from client revisions</span></div>
+      <div class="lcell"><b style="color:var(--good">9 t/yr</b><span>own-error tonnes, first ever visible</span></div>
+      <div class="lcell"><b style="color:var(--hot">28 t/yr</b><span>aged offcut, never reused</span></div>
+      <div class="lcell"><b style="color:var(--steel">80 t/yr</b><span>tonnes through nesting</span></div>
+    </div>
+
+    <div class="note">
+      <p><strong>Your words, at line 144:</strong> "When a loss comes from a client revision, we can claim
+      it back. But right now we don't know how many tonnes we lose to our own engineering errors."
+      The red bucket is the whole reason the revision register is in phase one rather than phase three.
+      It is also the cheapest thing here: one dropdown on a remake order.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================== WHAT IT IS NOT -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Honesty</div>
+    <h2>What this prototype is not.</h2>
+    <p>Every number above is computed in your browser by a deterministic solver from
+        <code>analysis/packer.js</code>. Nothing is drawn by hand and nothing is asserted.</p>
+
+    <div style="margin-top:34px">
+      <div class="fn no"><i>1</i><p><strong>The plate geometry is synthetic.</strong> 15 invented structural
+        parts on a 3000 × 2000 × 12 mm plate. It is not your steel, your thicknesses, or your parts.
+        It proves the shape of the argument, not your yield.</p></div>
+      <div class="fn no"><i>2</i><p><strong>It is not a nesting optimiser.</strong> A first-fit-decreasing
+        shelf packer is roughly the dumbest thing that works. A real solver would beat every arm here,
+        including the Advisor.</p></div>
+      <div class="fn no"><i>3</i><p><strong>There is no model in it.</strong> No AI, no learned weights.
+        If you needed AI to get this result, you would not have trusted it, and I would not be
+        showing it to you in week one.</p></div>
+      <div class="fn no"><i>4</i><p><strong>One plate is not a baseline.</strong> The replay runs on at
+        least 40 nests across 5 closed projects. A single plate is a bug report, not a business case.</p></div>
+      <div class="fn"><i>5</i><p><strong>But the arithmetic is real, and it is checkable.</strong>
+        <code>node analysis/packer.js</code> reproduces the table above and prints every finding.
+        <code>node tests/test_packer.js</code> asserts all 13 of them, 13/13 passing.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ CLOSE -->
+<section class="closing">
+  <div class="wrap">
+    <div class="eyebrow">The decision</div>
+    <h2>Buy nothing until week 4.</h2>
+    <p style="margin:0 auto">
+      The Advisor is only worth building if it beats a hand nest once you have measured one.
+      That measurement is four weeks of replay on your own closed projects, cuts no steel,
+      and needs no change to anyone's routine. If the hand nests win, that is a real answer
+      and you keep it.
+    </p>
+    <a class="cta" href="#">INR 55 lakh fixed · stop gate at week 4</a>
+    <p class="tiny" style="margin:26px auto 0;max-width:56ch">
+      Full reasoning in <code>docs/case-study.md</code>. Source of this page:
+      <code>prototype/index.html</code>, packer at <code>analysis/packer.js</code>.
+      Prepared by your Forward Deployed Engineer, 9 October 2026.
+    </p>
+  </div>
+</section>
+
+<footer><div class="wrap">
+  Prototype for Client B, Structural Steel. Geometry synthetic, arithmetic computed and tested.
+  No external research, market rate, or steel price appears on this page. Rupee figures in the
+  case study are labelled assumptions replaced in week 1 by the client's own ledger.
+</div></footer>
+
+<script>
+/* ============================================================ PACKER
+   Inlined verbatim from analysis/packer.js so the page runs standalone.
+   tests/test_packer.js asserts the same 13 findings against the module. */
+const PLATE_W=3000,PLATE_H=2000,THK=12,DENSITY=7850,MIN_REMNANT=500;
+const ARMS={
+  hand:{kerf:10,slop:30,ffd:false,registers:false,
+        label:'Hand nest, today',
+        why:'Drawn in drawing order, with manual marking gaps. This is what a person actually does.'},
+  autoDefault:{kerf:5,slop:0,ffd:true,registers:false,
+        label:'Strumis auto, defaults',
+        why:'First-fit-decreasing, kerf aware. The nesting the client already owns, unconfigured.'},
+  advisor:{kerf:5,slop:0,ffd:true,registers:true,
+        label:'Yield Advisor',
+        why:'Same pack, then the leftover is measured, tested against the 500 mm minimum, and registered with a location.'}
+};
+const PARTS=[
+ {w:900,h:620,tag:'GUSSET-A'},{w:900,h:620,tag:'GUSSET-A'},{w:760,h:520,tag:'BASE-PLATE'},
+ {w:560,h:400,tag:'END-PLATE'},{w:560,h:400,tag:'END-PLATE'},{w:560,h:400,tag:'END-PLATE'},
+ {w:560,h:400,tag:'END-PLATE'},{w:520,h:360,tag:'WEB-STRIP'},{w:520,h:360,tag:'WEB-STRIP'},
+ {w:520,h:360,tag:'WEB-STRIP'},{w:460,h:300,tag:'SHEAR-WEB'},{w:460,h:300,tag:'SHEAR-WEB'},
+ {w:340,h:260,tag:'STIFFENER'},{w:340,h:260,tag:'STIFFENER'},{w:300,h:240,tag:'STIFFENER'}
+];
+const PLATE_AREA=PLATE_W*PLATE_H;
+const PLATE_MASS=PLATE_AREA*THK/1e9*DENSITY/1000;
+const massOf=a=>a*THK/1e9*DENSITY/1000;
+
+function pack(parts,armName){
+  const{kerf,slop,ffd}=ARMS[armName];
+  const order=parts.map((p,i)=>({...p,i}));
+  if(ffd)order.sort((a,b)=>b.h-a.h||b.w-a.w||a.i-b.i);
+  const shelves=[],placed=[],deferred=[];
+  for(const p of order){
+    const w=p.w+slop,h=p.h+slop;let done=false;
+    for(const s of shelves){
+      if(h<=s.h&&s.x+w<=PLATE_W){placed.push({...p,x:s.x,y:s.y});s.x+=w+kerf;done=true;break;}
+    }
+    if(done)continue;
+    const top=shelves.length?shelves[shelves.length-1].y+shelves[shelves.length-1].h+kerf:0;
+    if(top+h<=PLATE_H){shelves.push({y:top,h,x:w+kerf});placed.push({...p,x:0,y:top});}
+    else deferred.push(p);
+  }
+  const partArea=placed.reduce((s,p)=>s+p.w*p.h,0);
+  const usedH=shelves.length?shelves[shelves.length-1].y+shelves[shelves.length-1].h:0;
+  const rightX=shelves.reduce((m,s)=>Math.max(m,s.x-kerf),0);
+  const bandH=PLATE_H-usedH,tailW=PLATE_W-rightX;
+  const cands=[bandH>=MIN_REMNANT?{x:0,y:usedH,w:PLATE_W,h:bandH}:null,
+               tailW>=MIN_REMNANT?{x:rightX,y:0,w:tailW,h:usedH}:null].filter(Boolean);
+  const remnant=cands.length?cands.reduce((a,b)=>a.w*a.h>=b.w*b.h?a:b):{x:0,y:0,w:0,h:0};
+  return{placed,deferred,shelves,partArea,usedH,rightX,remnant,bandH,tailW};
+}
+function score(parts,armName){
+  const r=pack(parts,armName);
+  const partMass=massOf(r.partArea),remArea=r.remnant.w*r.remnant.h;
+  const credited=ARMS[armName].registers?massOf(remArea):0;
+  const recoverable=partMass+credited;
+  return{arm:armName,label:ARMS[armName].label,why:ARMS[armName].why,
+    placed:r.placed.length,deferred:r.deferred.length,items:r.placed,remnant:r.remnant,
+    partArea:r.partArea,remArea,usedH:r.usedH,bandH:r.bandH,tailW:r.tailW,
+    plateMass:PLATE_MASS,partMass,credited,recoverable,
+    recoverablePct:recoverable/PLATE_MASS,netLoss:PLATE_MASS-recoverable,
+    registers:ARMS[armName].registers};
+}
+const R={hand:score(PARTS,'hand'),autoDefault:score(PARTS,'autoDefault'),advisor:score(PARTS,'advisor')};
+
+/* ======================================================== PLATE VIEW */
+const SVG=document.getElementById('svg');
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(NS,t);
+  for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+function drawPlate(armKey){
+  const r=R[armKey];
+  SVG.innerHTML='';
+  // kerf gaps on the leading edge of every part that is not at x=0
+  r.items.forEach(p=>{ if(p.x>0)
+    SVG.appendChild(el('line',{x1:p.x,y1:p.y,x2:p.x,y2:p.y+p.h,class:'cutline'})); });
+  // dead zone marker: the L that cannot be recovered
+  if(r.remArea===0){
+    const z=el('rect',{x:r.tailW?PLATE_W-r.tailW:PLATE_W-120,y:PLATE_H-(r.bandH||120),
+                       width:r.tailW||120,height:r.bandH||120,class:'rem dead'});
+    SVG.appendChild(z);
+    const t=el('text',{x:PLATE_W-(r.tailW||120)/2,y:PLATE_H-(r.bandH||120)/2,
+                       class:'remlab dead','text-anchor':'middle'});
+    t.textContent='BELOW 500 mm MINIMUM · SCRAP';SVG.appendChild(t);
+  }else{
+    SVG.appendChild(el('rect',{x:r.remnant.x,y:r.remnant.y,width:r.remnant.w,height:r.remnant.h,class:'rem'}));
+    const t=el('text',{x:r.remnant.x+r.remnant.w/2,y:r.remnant.y+r.remnant.h/2,
+                       class:'remlab','text-anchor':'middle'});
+    const dims=Math.round(r.remnant.w)+' × '+Math.round(r.remnant.h)+' mm';
+    t.textContent=r.registers?('REGISTERED '+dims+' · LOC-0417'):('UNLOGGED OFFCUT '+dims);
+    SVG.appendChild(t);
+  }
+  r.items.forEach(p=>{
+    const cls='part'+(r.registers?' advisor':'');
+    const g=el('g',{class:cls,opacity:'0'});
+    g.appendChild(el('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:4}));
+    if(p.w>260&&p.h>190){
+      const t=el('text',{x:p.x+p.w/2,y:p.y+p.h/2+3,'text-anchor':'middle',class:'part-tag'});
+      t.textContent=p.tag;g.appendChild(t);
+    }
+    SVG.appendChild(g);
+  });
+  return r;
+}
+
+function fill(armKey){
+  const r=R[armKey];
+  document.getElementById('rPct').textContent=Math.round(r.recoverablePct*100)+'%';
+  document.getElementById('rLoss').textContent=r.netLoss.toFixed(3);
+  document.getElementById('rBar').style.width=(r.recoverablePct*100)+'%';
+  document.getElementById('rBar').className=r.registers?'good':'hot';
+  document.getElementById('rBar2').style.width=(r.recoverablePct*100)+'%';
+  document.getElementById('mPlaced').textContent=r.placed+'/'+PARTS.length;
+  document.getElementById('mUsedH').textContent=Math.round(r.usedH)+' mm';
+  document.getElementById('mRem').textContent=r.remArea?Math.round(r.remnant.w)+'×'+Math.round(r.remnant.h)+' mm':'none';
+  document.getElementById('mMin').textContent=r.remArea?'yes':'no';
+  document.getElementById('mReg').innerHTML=r.registers
+    ?'<span style="color:var(--good)">yes, LOC-0417</span>'
+    :'<span style="color:var(--hot)">no</span>';
+  document.getElementById('armName').textContent=r.label;
+  document.getElementById('armWhy').textContent=r.why;
+}
+
+let tl;
+function show(armKey){
+  if(tl)tl.kill();
+  document.querySelectorAll('.armbtn[data-arm]').forEach(b=>
+    b.classList.toggle('on',b.dataset.arm===armKey));
+  const r=drawPlate(armKey);
+  tl=gsap.timeline();
+  tl.to('#svg .part',{opacity:1,duration:.16,stagger:.028,ease:'power2.out'},0)
+    .fromTo('#svg .rem',{opacity:0},{opacity:1,duration:.5},'-=0.25')
+    .fromTo('#svg .remlab',{opacity:0,y:-8},{opacity:1,y:0,duration:.4},'<')
+    .fromTo('#rPct,#rLoss',{opacity:.25,y:10},{opacity:1,y:0,duration:.45},'<0.1');
+  fill(armKey);
+}
+
+document.querySelectorAll('.armbtn[data-arm]').forEach(b=>
+  b.addEventListener('click',()=>show(b.dataset.arm)));
+
+document.getElementById('btnPlay').addEventListener('click',function(){
+  const keys=['hand','autoDefault','advisor'];
+  const master=gsap.timeline({onComplete:function(){this.textContent='▶ Play all';}});
+  keys.forEach((k,i)=>master.call(()=>show(k),null,i*2.6));
+});
+
+/* ======================================================== HERO STATS */
+document.getElementById('hs1').textContent=R.autoDefault.recoverable-R.hand.recoverable<0.0005
+  ?'0.000 t':(R.autoDefault.recoverable-R.hand.recoverable).toFixed(3)+' t';
+document.getElementById('hs2').textContent=(R.advisor.recoverable-R.autoDefault.recoverable).toFixed(3)+' t';
+document.getElementById('hs3').textContent=R.hand.netLoss.toFixed(3)+' t';
+document.getElementById('fPack').textContent='0.000 t';
+document.getElementById('fLog').textContent=(R.advisor.recoverable-R.autoDefault.recoverable).toFixed(3)+' t';
+
+/* ====================================================== BAND CHART */
+(function(){
+  const svg=document.getElementById('bandChart');
+  const W=900,H=420,mL=64,mR=26,mT=22,mB=48;
+  const x=p=>mL+(p/0.40)*(W-mL-mR);
+  const y=v=>H-mB-((v-0.04)/0.12)*(H-mT-mB);
+  const AX=[0,.10,.20,.30,.40];
+  // stated band
+  svg.appendChild(el('rect',{x:mL,y:y(0.10),width:W-mL-mR,height:y(0.07)-y(0.10),class:'statedband'}));
+  svg.appendChild(el('text',{x:mL+8,y:y(0.10)+13,class:'statedlab'})).textContent='YOUR STATED BAND · 7 to 10%';
+  // grid + axes
+  for(let v=.04;v<=.16;v+=.02){
+    svg.appendChild(el('line',{x1:mL,y1:y(v),x2:W-mR,y2:y(v),class:'grid-l'}));
+    const t=el('text',{x:mL-9,y:y(v)+3.5,class:'axlab','text-anchor':'end'});
+    t.textContent=(v*100).toFixed(0)+'%';svg.appendChild(t);
+  }
+  AX.forEach(p=>{const t=el('text',{x:x(p),y:H-mB+18,class:'axlab','text-anchor':'middle'});
+    t.textContent=(p*100).toFixed(0)+'%';svg.appendChild(t);});
+  svg.appendChild(el('line',{x1:mL,y1:H-mB,x2:W-mR,y2:H-mB,class:'axis'}));
+  svg.appendChild(el('line',{x1:mL,y1:mT,x2:mL,y2:H-mB,class:'axis'}));
+  const xl=el('text',{x:(mL+W-mR)/2,y:H-8,class:'axlab','text-anchor':'middle'});
+  xl.textContent='PLATE AS A SHARE OF TONNAGE';svg.appendChild(xl);
+  const yl=el('text',{x:16,y:(mT+H-mB)/2,class:'axlab','text-anchor':'middle',
+    transform:`rotate(-90 16 ${(mT+H-mB)/2})`});
+  yl.textContent='OVERALL WASTAGE';svg.appendChild(yl);
+  // band lines  5+15P  to  10+15P
+  const pts=[];
+  for(let p=0;p<=0.4001;p+=0.005)pts.push([p,0.05+0.15*p]);
+  svg.appendChild(el('polyline',{points:pts.map(q=>x(q[0])+','+y(q[1])).join(' '),class:'bandline2'}));
+  const pts2=[];
+  for(let p=0;p<=0.4001;p+=0.005)pts2.push([p,0.10+0.15*p]);
+  svg.appendChild(el('polyline',{points:pts2.map(q=>x(q[0])+','+y(q[1])).join(' '),class:'bandline'}));
+  // 33.3% end of overlap
+  svg.appendChild(el('line',{x1:x(1/3),y1:mT,x2:x(1/3),y2:H-mB,class:'vline'}));
+  const vt=el('text',{x:x(1/3)+7,y:mT+13,class:'statedlab'});
+  vt.textContent='OVERLAP ENDS · 33.3%';svg.appendChild(vt);
+  svg.appendChild(el('circle',{cx:x(1/3),cy:y(0.10),r:5,class:'pt'}));
+  // the P=15% counter-example, animated in
+  const pg=el('g',{opacity:'0'});
+  pg.appendChild(el('line',{x1:x(0.15),y1:y(0.0725),x2:x(0.15),y2:y(0.125),class:'vline',
+    stroke:'#F0803C'}));
+  pg.appendChild(el('circle',{cx:x(0.15),cy:y(0.0725),r:5,fill:'#F0803C'}));
+  const pt=el('text',{x:x(0.15),y:y(0.0725)+26,class:'caption','text-anchor':'middle',
+    fill:'#F0803C'});
+  pt.textContent='P=15% → 7.25%';pg.appendChild(pt);
+  svg.appendChild(pg);
+  const bad=el('text',{x:x(0.30),y:y(0.145)+4,class:'caption','text-anchor':'middle',opacity:'0'});
+  bad.textContent='✗ 10.0 + 15P ≤ 10% has no solution';svg.appendChild(bad);
+  gsap.to(pg,{opacity:1,duration:.9,ease:'power2.out',
+    scrollTrigger:{trigger:'#bandChart',start:'top 78%'}});
+  gsap.to(bad,{opacity:.85,duration:.8,delay:.7,
+    scrollTrigger:{trigger:'#bandChart',start:'top 78%'}});
+})();
+
+/* ============================================================ GSAP */
+gsap.set('.hero .tag,.hero h1,.hero .lede,.hstat,.scroll',{opacity:0,y:28});
+gsap.timeline({defaults:{ease:'power3.out'}})
+  .to('.hero .tag',{opacity:1,y:0,duration:.5})
+  .to('.hero h1',{opacity:1,y:0,duration:.75},'-=0.25')
+  .to('.hero .lede',{opacity:1,y:0,duration:.6},'-=0.45')
+  .to('.hstat',{opacity:1,y:0,duration:.55,stagger:.09},'-=0.3')
+  .to('.scroll',{opacity:1,y:0,duration:.4},'-=0.2');
+
+gsap.set('.plate,.readout .card,.finding,.chartbox,.stack,.lcell,.fcard,.fn',{opacity:0,y:44});
+ScrollTrigger.batch('.plate',{start:'top 82%',
+  onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.7})});
+ScrollTrigger.batch('.readout .card',{start:'top 86%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.6,stagger:.1})});
+ScrollTrigger.batch('.finding',{start:'top 84%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.7})});
+ScrollTrigger.batch('.chartbox',{start:'top 82%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.7})});
+ScrollTrigger.batch('.fcard',{start:'top 86%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.6,stagger:.09})});
+ScrollTrigger.batch('.fn',{start:'top 88%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.55,stagger:.07})});
+ScrollTrigger.batch('.lcell',{start:'top 88%',onEnter:b=>gsap.to(b,{opacity:1,y:0,duration:.55,stagger:.08})});
+
+/* ledger stacks: grow the after-stack from zero */
+gsap.from('#stackAfter div',{flexGrow:0,duration:1.1,stagger:.09,ease:'power2.out',
+  scrollTrigger:{trigger:'#stackAfter',start:'top 85%'}});
+
+show('hand');
+</script>
+</body>
+</html>
